@@ -3,7 +3,7 @@ import type { Alarm } from '../types'
 
 interface Props {
   alarm: Alarm
-  onComplete: (id: string) => void
+  onComplete: (id: string, memo?: string) => void
   onSnooze: (id: string, minutes: number) => void
   onDelete: (id: string) => void
 }
@@ -31,6 +31,8 @@ function formatTime(timestamp: number): string {
 export function AlarmCard({ alarm, onComplete, onSnooze, onDelete }: Props) {
   const [remaining, setRemaining] = useState(alarm.targetTime - Date.now())
   const [showSnoozeOptions, setShowSnoozeOptions] = useState(false)
+  const [completionMemo, setCompletionMemo] = useState('')
+  const [customSnoozeMin, setCustomSnoozeMin] = useState('')
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -40,7 +42,14 @@ export function AlarmCard({ alarm, onComplete, onSnooze, onDelete }: Props) {
   }, [alarm.targetTime])
 
   const isTriggered = alarm.status === 'triggered'
-  const progress = Math.max(0, Math.min(1, 1 - remaining / (alarm.intervalMinutes * 60 * 1000)))
+
+  // プログレスバー計算
+  // snoozeTargetTime がある場合 = スヌーズ中（snoozeTargetTime = スヌーズ開始時刻）
+  // cycleDuration: スヌーズ開始からtargetTimeまで / 通常はintervalMinutes
+  const cycleDuration = alarm.snoozeTargetTime
+    ? alarm.targetTime - alarm.snoozeTargetTime
+    : alarm.intervalMinutes * 60 * 1000
+  const progress = cycleDuration > 0 ? Math.max(0, Math.min(1, 1 - remaining / cycleDuration)) : 0
 
   return (
     <div className={`alarm-card ${isTriggered ? 'alarm-triggered' : ''}`}>
@@ -49,7 +58,7 @@ export function AlarmCard({ alarm, onComplete, onSnooze, onDelete }: Props) {
           <div className="alarm-label-row">
             <span className="alarm-label">{alarm.label}</span>
             <span className={`alarm-type-badge ${alarm.type}`}>
-              {alarm.type === 'recurring' ? '繰返' : '1回'}
+              {alarm.type === 'recurring' ? '繰り返し' : '1回'}
             </span>
           </div>
 
@@ -63,6 +72,7 @@ export function AlarmCard({ alarm, onComplete, onSnooze, onDelete }: Props) {
                 発動: {formatTime(alarm.targetTime)}
                 {alarm.cycleCount > 0 && ` ・ ${alarm.cycleCount}回目`}
               </div>
+              {alarm.memo && <div className="alarm-memo">{alarm.memo}</div>}
               <div className="progress-bar">
                 <div className="progress-fill" style={{ width: `${progress * 100}%` }} />
               </div>
@@ -76,26 +86,38 @@ export function AlarmCard({ alarm, onComplete, onSnooze, onDelete }: Props) {
             onClick={() => onDelete(alarm.id)}
             aria-label="削除"
           >
-            &#10005;
+            ✕
           </button>
         )}
       </div>
 
       {isTriggered && (
-        <div className="alarm-actions">
-          <button
-            className="btn-action btn-complete"
-            onClick={() => onComplete(alarm.id)}
-          >
-            &#10003; 完了
-          </button>
-          <button
-            className="btn-action btn-snooze"
-            onClick={() => setShowSnoozeOptions(!showSnoozeOptions)}
-          >
-            &#8634; スヌーズ
-          </button>
-        </div>
+        <>
+          <textarea
+            className="memo-input"
+            placeholder="メモ（任意）：投与量、検査結果など"
+            value={completionMemo}
+            onChange={e => setCompletionMemo(e.target.value)}
+            rows={1}
+          />
+          <div className="alarm-actions">
+            <button
+              className="btn-action btn-complete"
+              onClick={() => {
+                onComplete(alarm.id, completionMemo || undefined)
+                setCompletionMemo('')
+              }}
+            >
+              {alarm.type === 'recurring' ? '✓ 完了 → 次へ' : '✓ 完了'}
+            </button>
+            <button
+              className="btn-action btn-snooze"
+              onClick={() => setShowSnoozeOptions(!showSnoozeOptions)}
+            >
+              ↻ スヌーズ
+            </button>
+          </div>
+        </>
       )}
 
       {isTriggered && showSnoozeOptions && (
@@ -109,9 +131,33 @@ export function AlarmCard({ alarm, onComplete, onSnooze, onDelete }: Props) {
                 setShowSnoozeOptions(false)
               }}
             >
-              {min}分後
+              {min}分
             </button>
           ))}
+          <div className="snooze-custom-row">
+            <input
+              className="snooze-custom-input"
+              type="number"
+              min="1"
+              max="120"
+              placeholder="分"
+              value={customSnoozeMin}
+              onChange={e => setCustomSnoozeMin(e.target.value)}
+            />
+            <button
+              className="btn-snooze-custom-go"
+              onClick={() => {
+                const min = parseInt(customSnoozeMin)
+                if (min > 0) {
+                  onSnooze(alarm.id, min)
+                  setShowSnoozeOptions(false)
+                  setCustomSnoozeMin('')
+                }
+              }}
+            >
+              設定
+            </button>
+          </div>
         </div>
       )}
     </div>

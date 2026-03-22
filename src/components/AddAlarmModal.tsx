@@ -7,6 +7,13 @@ interface Props {
   onClose: () => void
 }
 
+function formatInterval(min: number): string {
+  if (min < 60) return `${min}分`
+  const h = Math.floor(min / 60)
+  const m = min % 60
+  return m > 0 ? `${h}h${m}m` : `${h}h`
+}
+
 export function AddAlarmModal({ onAdd, onClose }: Props) {
   const [label, setLabel] = useState('')
   const [type, setType] = useState<AlarmType>('recurring')
@@ -16,7 +23,18 @@ export function AddAlarmModal({ onAdd, onClose }: Props) {
 
   const handleSubmit = () => {
     const finalLabel = label.trim() || 'アラーム'
-    const finalInterval = isCustom ? parseInt(customMinutes) || 30 : intervalMinutes
+    let finalInterval: number
+
+    if (isCustom) {
+      const parsed = parseInt(customMinutes)
+      if (!parsed || parsed < 1 || parsed > 480) {
+        alert('1〜480分の範囲で入力してください')
+        return
+      }
+      finalInterval = parsed
+    } else {
+      finalInterval = intervalMinutes
+    }
 
     const alarm: Alarm = {
       id: crypto.randomUUID(),
@@ -64,9 +82,17 @@ export function AddAlarmModal({ onAdd, onClose }: Props) {
                   className="btn-preset"
                   onClick={() => handlePreset(preset)}
                 >
-                  <span className="preset-label">{preset.label}</span>
+                  <div>
+                    <span className="preset-label">{preset.label}</span>
+                    {preset.description && (
+                      <div className="preset-description">{preset.description}</div>
+                    )}
+                  </div>
                   <span className="preset-detail">
-                    {preset.intervalMinutes}分 ・ {preset.type === 'recurring' ? '繰返' : '1回'}
+                    {preset.intervalMinutes >= 60
+                      ? `${Math.floor(preset.intervalMinutes / 60)}時間${preset.intervalMinutes % 60 ? preset.intervalMinutes % 60 + '分' : ''}`
+                      : `${preset.intervalMinutes}分`
+                    } ・ {preset.type === 'recurring' ? '繰り返し' : '1回'}
                   </span>
                 </button>
               ))}
@@ -121,7 +147,7 @@ export function AddAlarmModal({ onAdd, onClose }: Props) {
                     setIsCustom(false)
                   }}
                 >
-                  {min}分
+                  {formatInterval(min)}
                 </button>
               ))}
               <button
@@ -137,7 +163,7 @@ export function AddAlarmModal({ onAdd, onClose }: Props) {
                   className="form-input custom-minutes"
                   type="number"
                   min="1"
-                  max="999"
+                  max="480"
                   value={customMinutes}
                   onChange={e => setCustomMinutes(e.target.value)}
                   placeholder="分数を入力"
