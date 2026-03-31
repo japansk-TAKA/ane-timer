@@ -838,10 +838,6 @@ body {
   .modal-body {
     padding: 8px 16px 28px;
   }
-
-  .app-footer {
-    padding-right: 80px;
-  }
 }
 
 /* Toast Notification */
@@ -1078,4 +1074,10 @@ body {
   text-decoration: underline;
   text-align: center;
   cursor: pointer;
+}
+
+@media (max-width: 480px) {
+  .app-footer {
+    padding-right: 80px;
+  }
 }
