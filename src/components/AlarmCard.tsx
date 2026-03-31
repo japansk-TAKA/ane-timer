@@ -1,23 +1,12 @@
 import { useState, useEffect } from 'react'
 import type { Alarm } from '../types'
+import { formatRemaining } from '../utils'
 
 interface Props {
   alarm: Alarm
   onComplete: (id: string, memo?: string) => void
   onSnooze: (id: string, minutes: number) => void
   onDelete: (id: string) => void
-}
-
-function formatRemaining(ms: number): string {
-  if (ms <= 0) return '00:00'
-  const totalSeconds = Math.floor(ms / 1000)
-  const hours = Math.floor(totalSeconds / 3600)
-  const minutes = Math.floor((totalSeconds % 3600) / 60)
-  const seconds = totalSeconds % 60
-  if (hours > 0) {
-    return `${hours}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`
-  }
-  return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`
 }
 
 function formatTime(timestamp: number): string {
