@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import type { Alarm, AlarmStatus, CompletionLog } from './types'
+import { safeSetItem } from './utils'
 import { AlarmCard } from './components/AlarmCard'
 import { AddAlarmModal } from './components/AddAlarmModal'
 import { CompletedSection } from './components/CompletedSection'
@@ -37,7 +38,7 @@ function App() {
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme)
-    localStorage.setItem(THEME_KEY, theme)
+    safeSetItem(THEME_KEY, theme)
   }, [theme])
 
   const toggleTheme = useCallback(() => {
@@ -51,7 +52,7 @@ function App() {
   })
 
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(alarms))
+    safeSetItem(STORAGE_KEY, JSON.stringify(alarms))
   }, [alarms])
 
   // 完了ログ管理
@@ -61,7 +62,7 @@ function App() {
   })
 
   useEffect(() => {
-    localStorage.setItem(LOGS_KEY, JSON.stringify(completionLogs))
+    safeSetItem(LOGS_KEY, JSON.stringify(completionLogs))
   }, [completionLogs])
 
   // 手術経過時間タイマー
@@ -72,16 +73,11 @@ function App() {
 
   useEffect(() => {
     if (surgeryStartTime) {
-      localStorage.setItem(SURGERY_START_KEY, JSON.stringify(surgeryStartTime))
+      safeSetItem(SURGERY_START_KEY, JSON.stringify(surgeryStartTime))
     } else {
       localStorage.removeItem(SURGERY_START_KEY)
     }
   }, [surgeryStartTime])
-
-  const startSurgery = useCallback(() => {
-    initAudio()
-    setSurgeryStartTime(Date.now())
-  }, []) // initAudio は後で定義するので useCallback の deps に追加できない → 下で再定義
 
   const resetSurgery = useCallback(() => {
     setSurgeryStartTime(null)
@@ -104,15 +100,6 @@ function App() {
     onConfirm: () => void
   } | null>(null)
 
-  // 全画面フラッシュ
-  const [isFlashing, setIsFlashing] = useState(false)
-  const flashTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-
-  const dismissFlash = useCallback(() => {
-    setIsFlashing(false)
-    if (flashTimeoutRef.current) clearTimeout(flashTimeoutRef.current)
-  }, [])
-
   // Web Audio API（iOS対応: AudioContextを保持・再利用）
   const audioCtxRef = useRef<AudioContext | null>(null)
 
@@ -123,6 +110,26 @@ function App() {
     if (audioCtxRef.current.state === 'suspended') {
       audioCtxRef.current.resume()
     }
+  }, [])
+
+  const startSurgery = useCallback(() => {
+    initAudio()
+    setSurgeryStartTime(Date.now())
+  }, [initAudio])
+
+  // 全画面フラッシュ
+  const [isFlashing, setIsFlashing] = useState(false)
+  const flashTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  useEffect(() => {
+    return () => {
+      if (flashTimeoutRef.current) clearTimeout(flashTimeoutRef.current)
+    }
+  }, [])
+
+  const dismissFlash = useCallback(() => {
+    setIsFlashing(false)
+    if (flashTimeoutRef.current) clearTimeout(flashTimeoutRef.current)
   }, [])
 
   const playAlarmSound = useCallback(() => {
