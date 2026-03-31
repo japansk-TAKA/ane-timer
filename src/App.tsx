@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import type { Alarm, AlarmStatus, CompletionLog } from './types'
 import { AlarmCard } from './components/AlarmCard'
 import { AddAlarmModal } from './components/AddAlarmModal'
@@ -8,6 +8,7 @@ import { CurrentTime } from './components/CurrentTime'
 const STORAGE_KEY = 'anetimer-alarms'
 const SURGERY_START_KEY = 'anetimer-surgery-start'
 const LOGS_KEY = 'anetimer-logs'
+const THEME_KEY = 'anetimer-theme'
 
 function SurgeryElapsed({ startTime }: { startTime: number }) {
   const [elapsed, setElapsed] = useState(Date.now() - startTime)
@@ -27,10 +28,26 @@ function SurgeryElapsed({ startTime }: { startTime: number }) {
 }
 
 function App() {
+  // ダークモード
+  const [theme, setTheme] = useState<'dark' | 'light'>(() => {
+    const saved = localStorage.getItem(THEME_KEY)
+    if (saved === 'light' || saved === 'dark') return saved
+    return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
+  })
+
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', theme)
+    localStorage.setItem(THEME_KEY, theme)
+  }, [theme])
+
+  const toggleTheme = useCallback(() => {
+    setTheme(prev => prev === 'dark' ? 'light' : 'dark')
+  }, [])
+
   // LocalStorage永続化: alarms
   const [alarms, setAlarms] = useState<Alarm[]>(() => {
     const saved = localStorage.getItem(STORAGE_KEY)
-    return saved ? JSON.parse(saved) : []
+    try { return saved ? JSON.parse(saved) : [] } catch { return [] }
   })
 
   useEffect(() => {
@@ -40,7 +57,7 @@ function App() {
   // 完了ログ管理
   const [completionLogs, setCompletionLogs] = useState<CompletionLog[]>(() => {
     const saved = localStorage.getItem(LOGS_KEY)
-    return saved ? JSON.parse(saved) : []
+    try { return saved ? JSON.parse(saved) : [] } catch { return [] }
   })
 
   useEffect(() => {
@@ -50,7 +67,7 @@ function App() {
   // 手術経過時間タイマー
   const [surgeryStartTime, setSurgeryStartTime] = useState<number | null>(() => {
     const saved = localStorage.getItem(SURGERY_START_KEY)
-    return saved ? JSON.parse(saved) : null
+    try { return saved ? JSON.parse(saved) : null } catch { return null }
   })
 
   useEffect(() => {
@@ -61,8 +78,13 @@ function App() {
     }
   }, [surgeryStartTime])
 
-  const toggleSurgeryTimer = useCallback(() => {
-    setSurgeryStartTime(prev => prev ? null : Date.now())
+  const startSurgery = useCallback(() => {
+    initAudio()
+    setSurgeryStartTime(Date.now())
+  }, []) // initAudio は後で定義するので useCallback の deps に追加できない → 下で再定義
+
+  const resetSurgery = useCallback(() => {
+    setSurgeryStartTime(null)
   }, [])
 
   const [showAddModal, setShowAddModal] = useState(false)
@@ -78,13 +100,35 @@ function App() {
   // 確認ダイアログ
   const [confirmDialog, setConfirmDialog] = useState<{
     message: string
+    confirmLabel: string
     onConfirm: () => void
   } | null>(null)
 
-  // 音声通知（Web Audio API）
+  // 全画面フラッシュ
+  const [isFlashing, setIsFlashing] = useState(false)
+  const flashTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const dismissFlash = useCallback(() => {
+    setIsFlashing(false)
+    if (flashTimeoutRef.current) clearTimeout(flashTimeoutRef.current)
+  }, [])
+
+  // Web Audio API（iOS対応: AudioContextを保持・再利用）
+  const audioCtxRef = useRef<AudioContext | null>(null)
+
+  const initAudio = useCallback(() => {
+    if (!audioCtxRef.current) {
+      audioCtxRef.current = new (window.AudioContext || (window as any).webkitAudioContext)()
+    }
+    if (audioCtxRef.current.state === 'suspended') {
+      audioCtxRef.current.resume()
+    }
+  }, [])
+
   const playAlarmSound = useCallback(() => {
     try {
-      const ctx = new (window.AudioContext || (window as any).webkitAudioContext)()
+      initAudio()
+      const ctx = audioCtxRef.current!
       const playBeep = (freq: number, startTime: number, duration: number) => {
         const osc = ctx.createOscillator()
         const gain = ctx.createGain()
@@ -97,14 +141,13 @@ function App() {
         osc.start(startTime)
         osc.stop(startTime + duration)
       }
-      // 3回ビープ
       playBeep(880, ctx.currentTime, 0.15)
       playBeep(880, ctx.currentTime + 0.2, 0.15)
       playBeep(1100, ctx.currentTime + 0.4, 0.3)
     } catch {}
-  }, [])
+  }, [initAudio])
 
-  // アラームチェック（音声通知付き）
+  // アラームチェック
   useEffect(() => {
     const interval = setInterval(() => {
       setAlarms(prev => {
@@ -118,6 +161,9 @@ function App() {
         })
         if (shouldPlaySound) {
           playAlarmSound()
+          setIsFlashing(true)
+          if (flashTimeoutRef.current) clearTimeout(flashTimeoutRef.current)
+          flashTimeoutRef.current = setTimeout(() => setIsFlashing(false), 3000)
         }
         return updated
       })
@@ -131,41 +177,42 @@ function App() {
   }, [])
 
   const completeAlarm = useCallback((id: string, memo?: string) => {
-    setAlarms(prev =>
-      prev.map(alarm => {
-        if (alarm.id !== id) return alarm
+    setAlarms(prev => {
+      const alarm = prev.find(a => a.id === id)
+      if (!alarm) return prev
 
-        // 完了ログを追加
-        const log: CompletionLog = {
-          id: crypto.randomUUID(),
-          alarmId: alarm.id,
-          alarmLabel: alarm.label,
-          completedAt: Date.now(),
-          cycleNumber: alarm.cycleCount + 1,
-          memo,
-        }
-        setCompletionLogs(logs => [...logs, log])
+      const log: CompletionLog = {
+        id: crypto.randomUUID(),
+        alarmId: alarm.id,
+        alarmLabel: alarm.label,
+        completedAt: Date.now(),
+        cycleNumber: alarm.cycleCount + 1,
+        memo,
+      }
+      setCompletionLogs(logs => [...logs, log])
 
-        if (alarm.type === 'recurring') {
-          const nextTarget = Date.now() + alarm.intervalMinutes * 60 * 1000
+      return prev.map(a => {
+        if (a.id !== id) return a
+        if (a.type === 'recurring') {
+          const nextTarget = Date.now() + a.intervalMinutes * 60 * 1000
           showToast(`次回: ${new Date(nextTarget).toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit', hour12: false })}`)
           return {
-            ...alarm,
+            ...a,
             status: 'running' as AlarmStatus,
             targetTime: nextTarget,
-            cycleCount: alarm.cycleCount + 1,
+            cycleCount: a.cycleCount + 1,
             snoozeTargetTime: undefined,
             memo: undefined,
           }
         }
         return {
-          ...alarm,
+          ...a,
           status: 'completed' as AlarmStatus,
           completedAt: Date.now(),
-          memo: memo || alarm.memo,
+          memo: memo || a.memo,
         }
       })
-    )
+    })
   }, [showToast])
 
   const snoozeAlarm = useCallback((id: string, minutes: number) => {
@@ -187,6 +234,7 @@ function App() {
   const deleteAlarm = useCallback((id: string) => {
     setConfirmDialog({
       message: 'このアラームを削除しますか？',
+      confirmLabel: '削除',
       onConfirm: () => {
         setAlarms(prev => prev.filter(a => a.id !== id))
         setConfirmDialog(null)
@@ -197,6 +245,7 @@ function App() {
   const clearCompleted = useCallback(() => {
     setConfirmDialog({
       message: '完了済みをすべてクリアしますか？',
+      confirmLabel: 'クリア',
       onConfirm: () => {
         setAlarms(prev => prev.filter(a => a.status !== 'completed'))
         setConfirmDialog(null)
@@ -204,11 +253,9 @@ function App() {
     })
   }, [])
 
-  // トリガー済みアラームを最上部に固定
   const activeAlarms = alarms
     .filter(a => a.status !== 'completed')
     .sort((a, b) => {
-      // triggered を最上部に
       if (a.status === 'triggered' && b.status !== 'triggered') return -1
       if (a.status !== 'triggered' && b.status === 'triggered') return 1
       return a.targetTime - b.targetTime
@@ -222,13 +269,27 @@ function App() {
 
   return (
     <div className="app">
+      {/* 全画面フラッシュ */}
+      {isFlashing && (
+        <div className="flash-overlay" onClick={dismissFlash} />
+      )}
+
       <header className="app-header">
         <div className="header-top">
           <h1 className="app-title">
             <span className="title-icon">&#9201;</span>
             AneTimer
           </h1>
-          <CurrentTime />
+          <div className="header-right">
+            <button
+              className="btn-theme-toggle"
+              onClick={toggleTheme}
+              aria-label={theme === 'dark' ? 'ライトモードに切替' : 'ダークモードに切替'}
+            >
+              {theme === 'dark' ? '☀' : '☾'}
+            </button>
+            <CurrentTime />
+          </div>
         </div>
         {activeAlarms.length > 0 && (
           <div className="alarm-summary">
@@ -240,24 +301,24 @@ function App() {
             )}
           </div>
         )}
-        <div className="surgery-timer">
-          {surgeryStartTime ? (
-            <>
-              <span className="surgery-timer-label">経過:</span>
-              <SurgeryElapsed startTime={surgeryStartTime} />
-              <button className="btn-surgery-timer" onClick={toggleSurgeryTimer}>
-                リセット
-              </button>
-            </>
-          ) : (
-            <button className="btn-surgery-timer" onClick={toggleSurgeryTimer}>
-              手術開始
+        {surgeryStartTime && (
+          <div className="surgery-timer">
+            <span className="surgery-timer-label">経過:</span>
+            <SurgeryElapsed startTime={surgeryStartTime} />
+            <button className="btn-surgery-timer" onClick={resetSurgery}>
+              リセット
             </button>
-          )}
-        </div>
+          </div>
+        )}
       </header>
 
       <main className="app-main">
+        {!surgeryStartTime && (
+          <button className="btn-surgery-start" onClick={startSurgery}>
+            手術開始
+          </button>
+        )}
+
         {activeAlarms.length === 0 && completedAlarms.length === 0 && (
           <div className="empty-state">
             <div className="empty-icon">&#128276;</div>
@@ -287,9 +348,23 @@ function App() {
         )}
       </main>
 
+      <footer className="app-footer">
+        <p className="disclaimer-text">
+          このアプリはあくまで補助ツールです。最終判断は担当医師が行ってください。
+        </p>
+        <a
+          className="feedback-link"
+          href="https://forms.gle/2de4mpsCqeEJzLXG9"
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          情報に誤りがある場合はこちら
+        </a>
+      </footer>
+
       <button
         className="fab-add"
-        onClick={() => setShowAddModal(true)}
+        onClick={() => { initAudio(); setShowAddModal(true) }}
         aria-label="アラーム追加"
       >
         &#43;
@@ -299,6 +374,7 @@ function App() {
         <AddAlarmModal
           onAdd={addAlarm}
           onClose={() => setShowAddModal(false)}
+          onError={showToast}
         />
       )}
 
@@ -313,7 +389,7 @@ function App() {
                 キャンセル
               </button>
               <button className="btn-confirm-ok" onClick={confirmDialog.onConfirm}>
-                削除
+                {confirmDialog.confirmLabel}
               </button>
             </div>
           </div>

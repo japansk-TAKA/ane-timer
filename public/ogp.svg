@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630">
+  <rect width="1200" height="630" fill="#0a0e1a"/>
+  <rect x="0" y="0" width="1200" height="4" fill="#3b82f6"/>
+  <!-- Background subtle grid lines -->
+  <line x1="0" y1="210" x2="1200" y2="210" stroke="#1a2035" stroke-width="1"/>
+  <line x1="0" y1="420" x2="1200" y2="420" stroke="#1a2035" stroke-width="1"/>
+  <!-- Clock icon area -->
+  <circle cx="200" cy="315" r="100" fill="none" stroke="#3b82f6" stroke-width="6" opacity="0.6"/>
+  <circle cx="200" cy="315" r="8" fill="#3b82f6"/>
+  <line x1="200" y1="315" x2="200" y2="245" stroke="#3b82f6" stroke-width="5" stroke-linecap="round"/>
+  <line x1="200" y1="315" x2="255" y2="345" stroke="#e8ecf4" stroke-width="4" stroke-linecap="round"/>
+  <!-- Title -->
+  <text x="340" y="280" font-family="-apple-system, BlinkMacSystemFont, 'Hiragino Sans', sans-serif" font-size="72" font-weight="700" fill="#e8ecf4">AneTimer</text>
+  <!-- Subtitle -->
+  <text x="340" y="350" font-family="-apple-system, BlinkMacSystemFont, 'Hiragino Sans', sans-serif" font-size="32" fill="#8b95a8">麻酔科術中リマインダー</text>
+  <!-- Feature tags -->
+  <rect x="340" y="390" width="200" height="44" rx="8" fill="#1a2035" stroke="#3b82f6" stroke-width="1.5"/>
+  <text x="440" y="418" font-family="-apple-system, sans-serif" font-size="22" fill="#3b82f6" text-anchor="middle">筋弛緩薬管理</text>
+  <rect x="558" y="390" width="200" height="44" rx="8" fill="#1a2035" stroke="#3b82f6" stroke-width="1.5"/>
+  <text x="658" y="418" font-family="-apple-system, sans-serif" font-size="22" fill="#3b82f6" text-anchor="middle">抗菌薬再投与</text>
+  <rect x="776" y="390" width="180" height="44" rx="8" fill="#1a2035" stroke="#3b82f6" stroke-width="1.5"/>
+  <text x="866" y="418" font-family="-apple-system, sans-serif" font-size="22" fill="#3b82f6" text-anchor="middle">輸液チェック</text>
+  <!-- Bottom note -->
+  <text x="600" y="560" font-family="-apple-system, sans-serif" font-size="22" fill="#5a6478" text-anchor="middle">麻酔科研修医・専攻医向け 術中タイマー管理ツール</text>
+</svg>

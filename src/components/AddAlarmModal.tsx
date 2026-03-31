@@ -5,6 +5,7 @@ import { INTERVAL_OPTIONS, PRESET_ALARMS } from '../types'
 interface Props {
   onAdd: (alarm: Alarm) => void
   onClose: () => void
+  onError: (message: string) => void
 }
 
 function formatInterval(min: number): string {
@@ -14,7 +15,7 @@ function formatInterval(min: number): string {
   return m > 0 ? `${h}h${m}m` : `${h}h`
 }
 
-export function AddAlarmModal({ onAdd, onClose }: Props) {
+export function AddAlarmModal({ onAdd, onClose, onError }: Props) {
   const [label, setLabel] = useState('')
   const [type, setType] = useState<AlarmType>('recurring')
   const [intervalMinutes, setIntervalMinutes] = useState(30)
@@ -28,7 +29,7 @@ export function AddAlarmModal({ onAdd, onClose }: Props) {
     if (isCustom) {
       const parsed = parseInt(customMinutes)
       if (!parsed || parsed < 1 || parsed > 480) {
-        alert('1〜480分の範囲で入力してください')
+        onError('1〜480分の範囲で入力してください')
         return
       }
       finalInterval = parsed
