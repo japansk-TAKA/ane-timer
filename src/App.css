@@ -838,6 +838,10 @@ body {
   .modal-body {
     padding: 8px 16px 28px;
   }
+
+  .app-footer {
+    padding-right: 80px;
+  }
 }
 
 /* Toast Notification */
