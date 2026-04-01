@@ -1,10 +1,11 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
-import type { Alarm, AlarmStatus, CompletionLog } from './types'
-import { safeSetItem } from './utils'
+import type { Alarm, AlarmStatus, AlarmSetItem, CompletionLog } from './types'
+import { safeSetItem, encodeAlarmSet, decodeAlarmSet } from './utils'
 import { AlarmCard } from './components/AlarmCard'
 import { AddAlarmModal } from './components/AddAlarmModal'
 import { CompletedSection } from './components/CompletedSection'
 import { CurrentTime } from './components/CurrentTime'
+import { SharePreviewModal } from './components/SharePreviewModal'
 
 const STORAGE_KEY = 'anetimer-alarms'
 const SURGERY_START_KEY = 'anetimer-surgery-start'
@@ -84,6 +85,14 @@ function App() {
   }, [])
 
   const [showAddModal, setShowAddModal] = useState(false)
+
+  // Phase B: URLプリセット共有
+  const [sharePreview, setSharePreview] = useState<AlarmSetItem[] | null>(() => {
+    const params = new URLSearchParams(window.location.search)
+    const set = params.get('set')
+    if (!set) return null
+    return decodeAlarmSet(set) as AlarmSetItem[] | null
+  })
 
   // トースト通知
   const [toast, setToast] = useState<string | null>(null)
@@ -274,6 +283,40 @@ function App() {
 
   const triggeredCount = alarms.filter(a => a.status === 'triggered').length
 
+  const shareAlarmSet = useCallback(() => {
+    const items = activeAlarms.map(a => ({
+      label: a.label,
+      type: a.type,
+      intervalMinutes: a.intervalMinutes,
+    }))
+    const encoded = encodeAlarmSet(items)
+    const url = `${window.location.origin}${window.location.pathname}?set=${encoded}`
+    navigator.clipboard.writeText(url).then(() => {
+      showToast('URLをコピーしました')
+    }).catch(() => {
+      showToast('コピー失敗 — URLバーからコピーしてください')
+    })
+  }, [activeAlarms, showToast])
+
+  const addFromShare = useCallback(() => {
+    if (!sharePreview) return
+    const now = Date.now()
+    const newAlarms: Alarm[] = sharePreview.map(item => ({
+      id: crypto.randomUUID(),
+      label: item.label,
+      type: item.type,
+      intervalMinutes: item.intervalMinutes,
+      targetTime: now + item.intervalMinutes * 60 * 1000,
+      status: 'running' as AlarmStatus,
+      createdAt: now,
+      cycleCount: 0,
+    }))
+    setAlarms(prev => [...prev, ...newAlarms])
+    setSharePreview(null)
+    window.history.replaceState({}, '', window.location.pathname)
+    showToast(`${newAlarms.length}件のアラームを追加しました`)
+  }, [sharePreview, showToast])
+
   return (
     <div className="app">
       {/* 全画面フラッシュ */}
@@ -288,6 +331,16 @@ function App() {
             AneTimer
           </h1>
           <div className="header-right">
+            {activeAlarms.length > 0 && (
+              <button
+                className="btn-share"
+                onClick={shareAlarmSet}
+                aria-label="設定を共有"
+                title="アラームセットを共有"
+              >
+                &#8679;
+              </button>
+            )}
             <button
               className="btn-theme-toggle"
               onClick={toggleTheme}
@@ -382,6 +435,17 @@ function App() {
           onAdd={addAlarm}
           onClose={() => setShowAddModal(false)}
           onError={showToast}
+        />
+      )}
+
+      {sharePreview && (
+        <SharePreviewModal
+          items={sharePreview}
+          onAdd={addFromShare}
+          onClose={() => {
+            setSharePreview(null)
+            window.history.replaceState({}, '', window.location.pathname)
+          }}
         />
       )}
 

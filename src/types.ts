@@ -33,6 +33,12 @@ export interface PresetOption {
   description?: string
 }
 
+export interface AlarmSetItem {
+  label: string
+  type: AlarmType
+  intervalMinutes: number
+}
+
 export const INTERVAL_OPTIONS = [5, 10, 15, 20, 30, 45, 60, 90, 120, 180, 240] as const
 
 // プリセット値の根拠:
